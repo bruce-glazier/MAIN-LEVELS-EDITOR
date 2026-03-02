@@ -1,23 +1,23 @@
 {
-	"geode": "4.10.0",
+	"geode": "5.2.0",
 	"early-load": true,
 	"gd": {
-		"win": "2.2074",
-		"android": "2.2074",
-		"mac": "2.2074",
-		"ios": "2.2074"
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
 	},
 
-	"version": "v8.0.0-beta.28",
+	"version": "v8.0.0-beta.29",
 	"id": "lr70.main-levels-editor",
 	"name": "Main Levels Editor",
-	"developers": [ "LatterRarity70" ],
+	"developers": [ "lil2kki" ],
 	"description": "customizable thing to change main levels uknowya",
 
 	"links": {
 		"community": "https://discord.gg/6SxAbk3bTA",
-		"homepage": "https://t.me/LatterRarity70",
-		"source": "https://github.com/LatterRarity70/Main-Levels-Editor"
+		"homepage": "https://t.me/lil2kki_ch",
+		"source": "https://github.com/lil2kki/Main-Levels-Editor"
 	},
 	"tags": [ "gameplay", "music", "interface", "utility", "customization", "cheat" ],
 
