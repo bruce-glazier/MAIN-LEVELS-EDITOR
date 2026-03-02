@@ -60,15 +60,15 @@ namespace MLE {
             int start = *it, end = start;
             while (++it != list.end() && *it == end + 1) end++;
 
-            if (end - start < 2) { // 1-2 IDs
+            if (end - start < 2) {
                 new_listing += fmt::format("{}{}", start, end > start ? fmt::format(",{}", end) : "");
             }
-            else { // 3+
+            else {
                 new_listing += fmt::format("{}:{}", start, end);
             }
             new_listing += ",";
         }
-        if (!new_listing.empty()) new_listing.pop_back(); // remove last comma)
+        if (!new_listing.empty()) new_listing.pop_back();
         return new_listing;
     }
 
@@ -96,22 +96,17 @@ namespace MLE {
         );
 
         for (auto entry : string::split(list, ",")) {
-            //sequence
             if (string::contains(entry.c_str(), ":")) {
                 auto seq = string::split(entry.c_str(), ":");
                 auto start = utils::numFromString<int>(seq[0].c_str()).unwrapOr(0);
                 auto end = utils::numFromString<int>(seq[1].c_str()).unwrapOr(0);
-                bool ew = start > end;//1:-22
+                bool ew = start > end;
                 for (int q = start; ew ? q != (end - 1) : q != (end + 1); ew ? --q : ++q) {
-                    auto id = q;
-                    //log::debug("{} (\"{}\")", id, entry);
-                    rtn.push_back(id);
+                    rtn.push_back(q);
                 }
             }
-            //single id
             else {
                 auto id = utils::numFromString<int>(entry).unwrapOr(0);
-                //log::debug("{} (\"{}\")", id, entry);
                 rtn.push_back(id);
             }
         }
@@ -123,15 +118,24 @@ namespace MLE {
 
 }
 
-// genius name
-class ConfigureLevelFileDataPopup : public geode::Popup<LevelEditorLayer*, std::filesystem::path> {
+namespace MLE {
+    inline bool containsAny(std::string_view str, std::initializer_list<std::string_view> subs) {
+        for (auto& s : subs) {
+            if (string::contains(str, s)) return true;
+        }
+        return false;
+    }
+}
+
+class ConfigureLevelFileDataPopup : public geode::Popup {
 protected:
-    bool setup(LevelEditorLayer* editor, std::filesystem::path related_File) override {
+    bool init(LevelEditorLayer* editor, std::filesystem::path related_File) {
+        if (!Popup::init(410.000f, 262.000f)) return false;
 
         auto scroll = ScrollLayer::create({
             this->m_buttonMenu->getContentSize().width * 0.86f,
             this->m_buttonMenu->getContentSize().height - 10.5f,
-            });
+        });
         scroll->ignoreAnchorPointForPosition(0);
         this->m_buttonMenu->addChildAtPosition(scroll, Anchor::Center, { 0.f, 0.0f });
 
@@ -140,13 +144,14 @@ protected:
         );
         for (auto asd : *json.get()) {
             auto key = asd.getKey().value_or("unnamed obj");
-            if (string::containsAny(key, { "levelString" })) continue;
+            if (MLE::containsAny(key, { "levelString" })) continue;
 
             auto layer = CCLayerColor::create({ 0,0,0,42 });
             layer->setContentWidth(scroll->getContentWidth());
             layer->setContentHeight(34.000f);
 
-            if (string::containsAny(key, { "difficulty","stars","requiredCoins","Name","song","sfx","Track" })) layer->setOpacity(90);
+            if (MLE::containsAny(key, { "difficulty","stars","requiredCoins","Name","song","sfx","Track" }))
+                layer->setOpacity(90);
 
             auto keyLabel = SimpleTextArea::create(key);
             keyLabel->setAnchorPoint({ 0.f, 0.5f });
@@ -159,15 +164,12 @@ protected:
             layer->addChildAtPosition(keyInputErr, Anchor::BottomLeft, { 6.f, 12.f });
 
             auto keyValInput = TextInput::create(132.f, key, keyLabel->getFont());
-
-            keyValInput->setFilter(" !\"#$ % &'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
-            keyValInput->getInputNode()->m_allowedChars = " !\"#$ % &'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+            keyValInput->setFilter(" !\"#$ % &'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~");
+            keyValInput->getInputNode()->m_allowedChars = " !\"#$ % &'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
             keyValInput->setString(asd.dump());
             keyValInput->setCallback(
-                [=](auto str) mutable { //INPUT CALLBACK
-
+                [=](auto str) mutable {
                     keyInputErr->setString("");
-
                     auto parse = matjson::parse(str);
                     if (parse.isOk()) {
                         (*json.get())[key] = parse.unwrapOrDefault();
@@ -179,11 +181,14 @@ protected:
                         );
                     };
                 }
-            ); //INPUT CALLBACK
+            );
 
-            auto bgSize = keyValInput->getBGSprite()->getContentSize();
-            keyValInput->getBGSprite()->setSpriteFrame(CCSprite::create("groundSquare_18_001.png")->displayFrame());
-            keyValInput->getBGSprite()->setContentSize(bgSize);
+            auto bgSprite = keyValInput->getBGSprite();
+            auto bgSize = bgSprite->getContentSize();
+            if (auto* tex = CCTextureCache::get()->addImage("groundSquare_18_001.png", false)) {
+                bgSprite->setTexture(tex);
+            }
+            bgSprite->setContentSize(bgSize);
 
             layer->addChildAtPosition(keyValInput, Anchor::Right, { -72.f, 0 });
 
@@ -206,7 +211,7 @@ protected:
                 if (!editor) return;
                 if (!editor->isRunning()) return;
                 if (item->getTag() == "DontSaveLevel"_h) void();
-				else EditorPauseLayer::create(editor)->saveLevel();
+                else EditorPauseLayer::create(editor)->saveLevel();
                 if (auto err = level::exportLevelFile(editor->m_level, related_File).err())
                     Notification::create(
                         "  Failed to export level: \n  " + err.value_or("unknown error"),
@@ -232,7 +237,7 @@ protected:
                 findFirstChildRecursive<CCLayerColor>(scroll->m_contentLayer, [](auto me) {
                     if (me->getOpacity() == 90) me->setZOrder(me->getZOrder() == me->getTag() ? -1 : me->getTag());
                     return false;
-                    });
+                });
                 scroll->m_contentLayer->updateLayout();
                 scroll->scrollToTop();
             }
@@ -248,9 +253,9 @@ protected:
         bottomMenuBG->setOpacity(190);
         bottomMenuBG->setID("bottomMenuBG"_spr);
         bottomMenuBG->setContentSize({
-                this->m_buttonMenu->getContentSize().width,
-                22.000f
-            });
+            this->m_buttonMenu->getContentSize().width,
+            22.000f
+        });
         bottomMenuBG->setZOrder(-1);
         this->m_buttonMenu->addChildAtPosition(bottomMenuBG, Anchor::Bottom, { 0.f, bottomMenuY });
 
@@ -262,7 +267,7 @@ protected:
 public:
     static ConfigureLevelFileDataPopup* create(LevelEditorLayer* editor, std::filesystem::path related_File) {
         auto ret = new ConfigureLevelFileDataPopup();
-        if (ret->initAnchored(410.000f, 262.000f, editor, related_File)) {
+        if (ret->init(editor, related_File)) {
             ret->autorelease();
             return ret;
         }
