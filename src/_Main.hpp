@@ -127,7 +127,7 @@ namespace MLE {
     }
 }
 
-class ConfigureLevelFileDataPopup : public geode::Popup {
+class ConfigureLevelFileDataPopup : public Popup {
 protected:
     bool init(LevelEditorLayer* editor, std::filesystem::path related_File) {
         if (!Popup::init(410.000f, 262.000f)) return false;
@@ -185,9 +185,8 @@ protected:
 
             auto bgSprite = keyValInput->getBGSprite();
             auto bgSize = bgSprite->getContentSize();
-            if (auto* tex = CCTextureCache::get()->addImage("groundSquare_18_001.png", false)) {
-                bgSprite->setTexture(tex);
-            }
+            // Load texture for NineSlice (setTexture not available in v5)
+            CCTextureCache::get()->addImage("groundSquare_18_001.png", false);
             bgSprite->setContentSize(bgSize);
 
             layer->addChildAtPosition(keyValInput, Anchor::Right, { -72.f, 0 });

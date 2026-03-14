@@ -160,7 +160,7 @@ namespace level {
         json.set("listPosition", level->m_listPosition); //["listPosition"] = level->m_listPosition;
         json.set("songIDs", std::string_view(level->m_songIDs.c_str())); //["songIDs"] = std::string_view(level->m_songIDs.c_str());
         json.set("sfxIDs", std::string_view(level->m_sfxIDs.c_str())); //["sfxIDs"] = std::string_view(level->m_sfxIDs.c_str());"sfxIDs"] = std::string_view(level->m_sfxIDs.c_str());
-        json.set("field_54", level->m_54); //["field_54"] = level->m_54;
+        // json.set("field_54", level->m_54); // field removed in v5
         json.set("bestTime", level->m_bestTime); //["bestTime"] = level->m_bestTime;
         json.set("bestPoints", level->m_bestPoints); //["bestPoints"] = level->m_bestPoints;
         json.set("platformerSeed", level->m_platformerSeed); //["platformerSeed"] = level->m_platformerSeed;
