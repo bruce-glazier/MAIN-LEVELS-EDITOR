@@ -26,130 +26,154 @@ is stored in funny `MLE_LevelsInJSON` class from include/cache.hpp
 #include <Geode/modify/LocalLevelManager.hpp>
 class $modify(MLE_LocalLevelManager, LocalLevelManager) {
     $override bool init() {
-        m_mainLevels.clear();
-        MLE_LevelsInJSON::get()->clear();
+        try {
+            m_mainLevels.clear();
+            MLE_LevelsInJSON::get()->clear();
 
-        if (!LocalLevelManager::init()) return false;
+            if (!LocalLevelManager::init()) return false;
 
-        //dont load levels if Loading Layer was not created
-        //log::debug("CCFileUtils::get()->m_fullPathCache: {}", CCFileUtils::get()->m_fullPathCache);
-        if (not CCFileUtils::get()->m_fullPathCache.contains("goldFont.fnt")) return true;
+            //dont load levels if Loading Layer was not created
+            //log::debug("CCFileUtils::get()->m_fullPathCache: {}", CCFileUtils::get()->m_fullPathCache);
+            if (not CCFileUtils::get()->m_fullPathCache.contains("goldFont.fnt")) return true;
 
-        auto backupPath = getMod()->getSaveDir() / "settings_backup.json";
-        auto currentSettings = getMod()->getSavedSettingsData();
+            auto backupPath = getMod()->getSaveDir() / "settings_backup.json";
+            auto currentSettings = getMod()->getSavedSettingsData();
 
-        auto fucku = std::error_code();
-        if (not std::filesystem::exists(backupPath, fucku)) {
-            if (auto err = file::writeToJson(backupPath, currentSettings).err()) log::warn(
-                "Failed to create settings backup: {}", err
-            );
-            else log::info("Settings backup created at '{}'", backupPath);
-        }
-
-        //shared listing setup for example
-        log::info("Searching for custom settings enforcement file '{}'...", "settings.json"_spr);
-        if (fileExistsInSearchPaths("settings.json"_spr)) {
-            //path
-            auto path = std::filesystem::path(CCFileUtils::get()->fullPathForFilename(
-                "settings.json"_spr, 0
-            ).c_str());
-            log::info("Found custom settings enforcement file at '{}'!", path);
-
-            //read and overwrite values
-            auto dataResult = file::readJson(path);
-            if (dataResult.isOk()) {
-                auto data = dataResult.unwrap();
-                log::info("{}", data.dump());
-                for (auto& [key, value] : data) getMod()->getSavedSettingsData().set(key, value);
-
-                //save
-                auto saveResult = file::writeToJson(
-                    getMod()->getSaveDir() / "settings.json", getMod()->getSavedSettingsData()
-                );
-                if (saveResult.isErr()) log::error("Failed to save settings: {}", saveResult.unwrapErr());
-                else {
-                    //reload
-                    auto loadResult = getMod()->loadData();
-                    if (loadResult.isErr()) log::error("Failed to reload mod data: {}", loadResult.unwrapErr());
-                    else log::info("Custom settings enforcement file loaded!");
+            auto fucku = std::error_code();
+            try {
+                if (not std::filesystem::exists(backupPath, fucku)) {
+                    if (auto err = file::writeToJson(backupPath, currentSettings).err()) log::warn(
+                        "Failed to create settings backup: {}", err
+                    );
+                    else log::info("Settings backup created at '{}'", backupPath);
                 }
+            } catch (const std::exception& e) {
+                log::warn("Exception during settings backup: {}", e.what());
             }
-            else log::error("Failed to read settings file: {}", dataResult.err());
+
+            //shared listing setup for example
+            log::info("Searching for custom settings enforcement file '{}'...", "settings.json"_spr);
+            try {
+                if (fileExistsInSearchPaths("settings.json"_spr)) {
+                    //path
+                    auto path = std::filesystem::path(CCFileUtils::get()->fullPathForFilename(
+                        "settings.json"_spr, 0
+                    ).c_str());
+                    log::info("Found custom settings enforcement file at '{}'!", path);
+
+                    //read and overwrite values
+                    auto dataResult = file::readJson(path);
+                    if (dataResult.isOk()) {
+                        auto data = dataResult.unwrap();
+                        log::info("{}", data.dump());
+                        for (auto& [key, value] : data) getMod()->getSavedSettingsData().set(key, value);
+
+                        //save
+                        auto saveResult = file::writeToJson(
+                            getMod()->getSaveDir() / "settings.json", getMod()->getSavedSettingsData()
+                        );
+                        if (saveResult.isErr()) log::error("Failed to save settings: {}", saveResult.unwrapErr());
+                        else {
+                            //reload
+                            auto loadResult = getMod()->loadData();
+                            if (loadResult.isErr()) log::error("Failed to reload mod data: {}", loadResult.unwrapErr());
+                            else log::info("Custom settings enforcement file loaded!");
+                        }
+                    }
+                    else log::error("Failed to read settings file: {}", dataResult.err());
+                }
+                else {
+                    log::info("Custom settings file not found, checking for backup...");
+                    if (std::filesystem::exists(backupPath, fucku)) {
+                        //replace
+                        std::filesystem::remove(getMod()->getSaveDir() / "settings.json", fucku);
+                        std::filesystem::rename(backupPath, getMod()->getSaveDir() / "settings.json", fucku);
+                        //reload
+                        auto loadResult = getMod()->loadData();
+                        if (loadResult.isErr()) log::error("Failed to reload mod data: {}", loadResult.unwrapErr());
+                        else log::info("Settings successfully restored from backup!");
+                    }
+                    else log::info("No backup file found, using current settings");
+                }
+            } catch (const std::exception& e) {
+                log::warn("Exception during settings loading: {}", e.what());
+            }
+
+            log::debug("Loading .level files for list: {}", MLE::getListingIDs());
+            try {
+                for (auto id : MLE::getListingIDs()) {
+
+                    log::debug("Loading level {}", id);
+
+                    auto level = GJGameLevel::create();
+                    level->m_levelName = "___level_was_not_loaded";
+                    level = MLE::tryLoadFromFiles(level, id);
+
+                    log::debug("{}", level->m_levelName.c_str());
+
+                    if (std::string(level->m_levelName.c_str()) != "___level_was_not_loaded") { // level name was changed if it was loaded
+                        log::info("Loaded level {}", id);
+
+                        if (std::string(level->m_levelString.c_str()).empty()) void();
+                        else m_mainLevels[id] = level->m_levelString;
+
+                        log::debug("Level {} string size is {}", id, std::string(level->m_levelString.c_str()).size());
+
+                        auto val = level::jsonFromLevel(level);
+                        if (auto importinf = level::isImported(level)) val["file"] = importinf->getID();
+                        else log::error("Level is not imported?.. {}", importinf);
+                        MLE_LevelsInJSON::get()->insert_or_assign(id, val);
+
+                        log::debug("Level {} json dump size is {}", id, MLE_LevelsInJSON::get()->at(id).dump().size());
+                        log::debug("Level file: {}", id, MLE_LevelsInJSON::get()->at(id)["file"].dump());
+                    }
+                    else log::debug("The .level file for {} was not founded", id);
+                }
+            } catch (const std::exception& e) {
+                log::error("Exception while loading .level files: {}", e.what());
+            }
+
+            try {
+                for (auto shit : CCFileUtils::get()->getSearchPaths()) {
+                    auto path = std::string(shit.c_str());
+                    if (auto a = "audio.json"_spr; existsInPaths((path + a).c_str())) {
+                        auto readResult = file::readJson((path + a).c_str());
+                        if (readResult.isOk()) {
+                            MLE_LevelsInJSON::get()->insert_or_assign("audio"_h, readResult.unwrap());
+                            MLE_LevelsInJSON::get()->at("audio"_h)["file"] = path + a;
+                        }
+                    }
+                    if (auto a = "artists.json"_spr; existsInPaths((path + a).c_str())) {
+                        auto readResult = file::readJson((path + a).c_str());
+                        if (readResult.isOk()) {
+                            MLE_LevelsInJSON::get()->insert_or_assign("artists"_h, readResult.unwrap());
+                            MLE_LevelsInJSON::get()->at("artists"_h)["file"] = path + a;
+                        }
+                    }
+                };
+            } catch (const std::exception& e) {
+                log::warn("Exception while loading audio/artists files: {}", e.what());
+            }
+
+            if (!MLE_LevelsInJSON::get()->contains("audio"_h)) {
+                MLE_LevelsInJSON::get()->insert_or_assign("audio"_h, matjson::Value());
+                MLE_LevelsInJSON::get()->at(
+                    "audio"_h
+                )["file"] = string::pathToString(getMod()->getConfigDir() / "audio.json"_spr);
+            };
+            if (!MLE_LevelsInJSON::get()->contains("artists"_h)) {
+                MLE_LevelsInJSON::get()->insert_or_assign("artists"_h, matjson::Value());
+                MLE_LevelsInJSON::get()->at(
+                    "artists"_h
+                )["file"] = string::pathToString(getMod()->getConfigDir() / "artists.json"_spr);
+            };
+        } catch (const std::exception& e) {
+            log::error("Fatal exception during LocalLevelManager init: {}", e.what());
+            return true; // return true to at least let the game continue
+        } catch (...) {
+            log::error("Unknown exception during LocalLevelManager init");
+            return true;
         }
-        else {
-            log::info("Custom settings file not found, checking for backup...");
-            if (std::filesystem::exists(backupPath, fucku)) {
-                //replace
-                std::filesystem::remove(getMod()->getSaveDir() / "settings.json", fucku);
-                std::filesystem::rename(backupPath, getMod()->getSaveDir() / "settings.json", fucku);
-                //reload
-                auto loadResult = getMod()->loadData();
-                if (loadResult.isErr()) log::error("Failed to reload mod data: {}", loadResult.unwrapErr());
-                else log::info("Settings successfully restored from backup!");
-            }
-            else log::info("No backup file found, using current settings");
-        }
-
-        log::debug("Loading .level files for list: {}", MLE::getListingIDs());
-        for (auto id : MLE::getListingIDs()) {
-
-            log::debug("Loading level {}", id);
-
-            auto level = GJGameLevel::create();
-            level->m_levelName = "___level_was_not_loaded";
-            level = MLE::tryLoadFromFiles(level, id);
-
-            log::debug("{}", level->m_levelName.c_str());
-
-            if (std::string(level->m_levelName.c_str()) != "___level_was_not_loaded") { // level name was changed if it was loaded
-                log::info("Loaded level {}", id);
-
-                if (std::string(level->m_levelString.c_str()).empty()) void();
-                else m_mainLevels[id] = level->m_levelString;
-
-                log::debug("Level {} string size is {}", id, std::string(level->m_levelString.c_str()).size());
-
-                auto val = level::jsonFromLevel(level);
-                if (auto importinf = level::isImported(level)) val["file"] = importinf->getID();
-                else log::error("Level is not imported?.. {}", importinf);
-                MLE_LevelsInJSON::get()->insert_or_assign(id, val);
-
-                log::debug("Level {} json dump size is {}", id, MLE_LevelsInJSON::get()->at(id).dump().size());
-                log::debug("Level file: {}", id, MLE_LevelsInJSON::get()->at(id)["file"].dump());
-            }
-            else log::debug("The .level file for {} was not founded", id);
-        }
-
-        for (auto shit : CCFileUtils::get()->getSearchPaths()) {
-            auto path = std::string(shit.c_str());
-            if (auto a = "audio.json"_spr; existsInPaths((path + a).c_str())) {
-                MLE_LevelsInJSON::get()->insert_or_assign(
-                    "audio"_h, 
-                    file::readJson((path + a).c_str()).unwrapOr("")
-                );
-                MLE_LevelsInJSON::get()->at("audio"_h)["file"] = path + a;
-            }
-            if (auto a = "artists.json"_spr; existsInPaths((path + a).c_str())) {
-                MLE_LevelsInJSON::get()->insert_or_assign(
-                    "artists"_h, 
-                    file::readJson((path + a).c_str()).unwrapOr("")
-                );
-                MLE_LevelsInJSON::get()->at("artists"_h)["file"] = path + a;
-            }
-        };
-
-        if (!MLE_LevelsInJSON::get()->contains("audio"_h)) {
-            MLE_LevelsInJSON::get()->insert_or_assign("audio"_h, matjson::Value());
-            MLE_LevelsInJSON::get()->at(
-                "audio"_h
-            )["file"] = string::pathToString(getMod()->getConfigDir() / "audio.json"_spr);
-        };
-        if (!MLE_LevelsInJSON::get()->contains("artists"_h)) {
-            MLE_LevelsInJSON::get()->insert_or_assign("artists"_h, matjson::Value());
-            MLE_LevelsInJSON::get()->at(
-                "artists"_h
-            )["file"] = string::pathToString(getMod()->getConfigDir() / "artists.json"_spr);
-        };
 
         return true;
     }

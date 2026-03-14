@@ -18,15 +18,25 @@ namespace MLE {
         
         geode::log::info("Starting export to: {}", savePath.string());
         
-        // Execute export asynchronously
-        std::thread([level, savePath]() {
-            auto result = level::exportLevelFile(level, savePath);
-            if (result.isErr()) {
-                geode::log::error("Export failed: {}", result.unwrapErr());
-            } else {
-                geode::log::info("Level exported successfully to {}", savePath.string());
-            }
-        }).detach();
+        // Use platform-specific async with proper error handling
+        try {
+            std::thread([level, savePath]() {
+                try {
+                    auto result = level::exportLevelFile(level, savePath);
+                    if (result.isErr()) {
+                        geode::log::error("Export failed: {}", result.unwrapErr());
+                    } else {
+                        geode::log::info("Level exported successfully to {}", savePath.string());
+                    }
+                } catch (const std::exception& e) {
+                    geode::log::error("Export exception: {}", e.what());
+                } catch (...) {
+                    geode::log::error("Export unknown exception occurred");
+                }
+            }).detach();
+        } catch (const std::exception& e) {
+            geode::log::error("Failed to start export thread: {}", e.what());
+        }
     }
     
     inline void setupLoadLevelPicker() {
