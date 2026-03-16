@@ -1,3 +1,5 @@
+Not my mod, just a fork of the original source code with some vibe coding to enable v5 of geode. I have no intention of continuing to work on this and all credit goes to the original author: https://github.com/lil2kki/Main-Levels-Editor
+
 # Main Levels Editor
 
 Allows you to control what levels should be in level select layer. 
