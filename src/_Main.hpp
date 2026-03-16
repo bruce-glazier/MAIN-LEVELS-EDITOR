@@ -22,32 +22,58 @@ using namespace geode::prelude;
 namespace MLE {
 
     inline GJGameLevel* tryLoadFromFiles(GJGameLevel* level, int customLvlID = 0) {
-        auto levelID = customLvlID ? customLvlID : level->m_levelID;
-        auto subdir = "levels/";
+        try {
+            auto levelID = customLvlID ? customLvlID : level->m_levelID;
+            auto subdir = "levels/";
 
-    asd:
+        asd:
 
-        auto levelFileName = fmt::format("{}{}.level", subdir, levelID);
-        if (fileExistsInSearchPaths(levelFileName.c_str())) {
-            auto path = CCFileUtils::get()->fullPathForFilename(levelFileName.c_str(), 0);
-            level = level::importLevelFile(path.c_str()).unwrapOr(level);
+            auto levelFileName = fmt::format("{}{}.level", subdir, levelID);
+            if (fileExistsInSearchPaths(levelFileName.c_str())) {
+                try {
+                    auto path = CCFileUtils::get()->fullPathForFilename(levelFileName.c_str(), 0);
+                    auto importResult = level::importLevelFile(path.c_str());
+                    if (importResult.isOk()) {
+                        level = importResult.unwrap();
+                    } else {
+                        log::error("Failed to import .level file {}: {}", levelFileName, importResult.err());
+                    }
+                } catch (const std::exception& e) {
+                    log::error("Exception importing .level file {}: {}", levelFileName, e.what());
+                }
+            }
+            else log::debug("don't exists in search paths: {}", levelFileName.c_str());
+
+            auto jsonFileName = fmt::format("{}{}.json", subdir, levelID);
+            if (fileExistsInSearchPaths(jsonFileName.c_str())) {
+                try {
+                    auto path = CCFileUtils::get()->fullPathForFilename(jsonFileName.c_str(), 0);
+                    auto readResult = file::readJson(path.c_str());
+                    if (readResult.isOk()) {
+                        level::updateLevelByJson(readResult.unwrap(), level);
+                        level::isImported(level, path.c_str());
+                    } else {
+                        log::error("Failed to read JSON file {}: {}", jsonFileName, readResult.err());
+                    }
+                } catch (const std::exception& e) {
+                    log::error("Exception reading JSON file {}: {}", jsonFileName, e.what());
+                }
+            }
+            else log::debug("don't exists in search paths: {}", jsonFileName.c_str());
+
+            if (subdir != std::string("")) {
+                subdir = "";
+                goto asd;
+            }
+
+            return level;
+        } catch (const std::exception& e) {
+            log::error("Fatal exception in tryLoadFromFiles: {}", e.what());
+            return level;
+        } catch (...) {
+            log::error("Unknown exception in tryLoadFromFiles");
+            return level;
         }
-        else log::debug("don't exists in search paths: {}", levelFileName.c_str());
-
-        auto jsonFileName = fmt::format("{}{}.json", subdir, levelID);
-        if (fileExistsInSearchPaths(jsonFileName.c_str())) {
-            auto path = CCFileUtils::get()->fullPathForFilename(jsonFileName.c_str(), 0);
-            level::updateLevelByJson(file::readJson(path.c_str()).unwrapOr(""), level);
-            level::isImported(level, path.c_str());
-        }
-        else log::debug("don't exists in search paths: {}", jsonFileName.c_str());
-
-        if (subdir != std::string("")) {
-            subdir = "";
-            goto asd;
-        }
-
-        return level;
     };
 
     inline GJGameLevel* tryLoadFromFiles(int customLvlID) {
@@ -77,12 +103,18 @@ namespace MLE {
         if (cocos::fileExistsInSearchPaths((val + ".txt").c_str())) {
             auto path = CCFileUtils::get()->fullPathForFilename((val + ".txt").c_str(), 0);
             log::info("Saving `{}` to `{}`...", slist, path.c_str());
-            file::writeStringSafe(path.c_str(), slist).err();
+            auto writeResult = file::writeStringSafe(path.c_str(), slist);
+            if (!writeResult) {
+                log::error("Failed to write listing file: {}", writeResult.err().value_or("Unknown error"));
+            }
         }
         else {
             log::info("Saving `{}` to settings...", slist);
             Mod::get()->setSettingValue<std::string>(val, slist);
-            Mod::get()->saveData().isOk();
+            auto saveResult = Mod::get()->saveData();
+            if (!saveResult) {
+                log::error("Failed to save mod data: {}", saveResult.err().value_or("Unknown error"));
+            }
         }
     }
 

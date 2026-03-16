@@ -477,19 +477,30 @@ protected:
 
                     auto level = GameManager::get()->getGameLayer()->m_level;
 
-                    // parse input
-                    auto target_id = resolveListEntry(id_input, level);
+                    // parse target ID first
+                    std::string input = id_input->getString();
+                    auto target_id = utils::numFromString<int>(
+                        (input == "-1") ? "" : input
+                    ).unwrapOr(
+                        level->m_levelID.value()
+                    );
 
                     auto errcd = std::error_code();
                     std::filesystem::create_directories(getMod()->getConfigDir() / "levels", errcd);
 
-                    // export
-                    auto export_result = level::exportLevelFile(
-                        level, getMod()->getConfigDir() / "levels" / fmt::format("{}.level", target_id)
-                    );
-                    if (!export_result) return Notification::create(
-                        "Failed to export level\n" + export_result.err().value_or("UNK ERROR")
-                        , NotificationIcon::Error)->show();
+                    // export level file FIRST before updating listing
+                    auto export_path = getMod()->getConfigDir() / "levels" / fmt::format("{}.level", target_id);
+                    auto export_result = level::exportLevelFile(level, export_path);
+                    if (!export_result) {
+                        log::error("Failed to export level ID {}: {}", target_id, export_result.err().value_or("Unknown error"));
+                        return Notification::create(
+                            "Failed to export level\n" + export_result.err().value_or("UNK ERROR")
+                            , NotificationIcon::Error)->show();
+                    }
+                    log::info("Successfully exported level {} to {}", target_id, export_path.string().c_str());
+
+                    // NOW that export succeeded, update listing to include this level
+                    auto actual_id = resolveListEntry(id_input, level);
 
                     Notification::create("Level inserted to list!", NotificationIcon::Success)->show();
 
